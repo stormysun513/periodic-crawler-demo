@@ -1,8 +1,8 @@
+import os
 import sys
 import requests
 import lxml.html
 import logging
-import json
 
 LOG_FILE = '/tmp/mycrawler.log'
 URL_TEMPLATE = 'http://www.comicbus.com/html/{}.html'
@@ -10,8 +10,14 @@ PAGE_TEMPLATE = 'http://v.comicbus.com/online/comic-{}.html?ch={}'
 
 targets = {
 	'103': 'One Piece',
-	'10818': 'Kakegurui',
+	# '10818': 'Kakegurui',
+	# '653': 'Detective Conan',
 }
+
+def macos_notif(title, content):
+    os.system("""
+			osascript -e 'display notification "{}" with title "{}"'
+			""".format(content, title))
 
 if __name__ == '__main__':
 
@@ -20,7 +26,7 @@ if __name__ == '__main__':
 	try:
 		with open(LOG_FILE,'r') as f:
 			for line in f:
-				tokens = line.split(',')
+				tokens = list(map(str.strip, line.split(',')))
 				mangas[tokens[0]] = tokens[1] if tokens[0] in targets else 'none'
 	except IOError as e:
 		# ignore file not exists exception
@@ -50,12 +56,12 @@ if __name__ == '__main__':
 
 		root = lxml.html.fromstring(r.content)
 		texts = root.xpath(
-				'//body/table[5]//table[2]//table[1]//table[1]//a/font/b/text()'
+			'//body/table[5]//table[2]//table[1]//table[1]//a/font/b/text()'
 		)
 
 		# the first string represents current episodes of manga should be
 		# in a form of '1-NUM'
-		tokens = texts[0].split('-') if texts else None
+		tokens = list(map(str.strip, texts[0].split('-'))) if texts else None
 		if len(tokens) > 1:
 			try:
 				latest = int(tokens[1])
@@ -63,7 +69,10 @@ if __name__ == '__main__':
 				logging.warning('invalid raw string for conversion')
 				continue
 			f.write('{},{}\n'.format(index, latest))
-			print('link: ', PAGE_TEMPLATE.format(index, latest))
+			link = PAGE_TEMPLATE.format(index, latest)
+			if str(latest) != mangas[index]:
+				logging.error('new episode found')
+				macos_notif(name + ' has new episode!', link)
 
 	f.close()
 
