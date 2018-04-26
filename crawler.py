@@ -2,28 +2,38 @@ import sys
 import requests
 import lxml.html
 import logging
+import json
 
-urls = [
-	'http://www.comicbus.com/html/103.html',		# One piece
-	'http://www.comicbus.com/html/10818.html',		# Kakegurui
-]
+LOG_FILE = '/tmp/mycrawler.log'
+URL_TEMPLATE = 'http://www.comicbus.com/html/{}.html'
+PAGE_TEMPLATE = 'http://v.comicbus.com/online/comic-{}.html?ch={}'
 
-def to_int(raw):
-	try:
-		num = int(raw)
-		return num
-	except ValueError as e:
-		raise e
+targets = {
+	'103': 'One Piece',
+	'10818': 'Kakegurui',
+}
 
 if __name__ == '__main__':
 
-	# load the last episode
-	for url in urls:
+	mangas = {}
+	# load the last record
+	try:
+		with open(LOG_FILE,'r') as f:
+			for line in f:
+				tokens = line.split(',')
+				mangas[tokens[0]] = tokens[1] if tokens[0] in targets else 'none'
+	except IOError as e:
+		# ignore file not exists exception
+		pass
 
+	# create log file if not exists
+	f = open(LOG_FILE, 'w+')
+
+	for index, name in targets.items():
 		retry = 10
 		while retry > 0:
 			try:
-				r = requests.get(url)
+				r = requests.get(URL_TEMPLATE.format(index))
 				r.raise_for_status()
 				break
 			except requests.exceptions.Timeout:
@@ -43,15 +53,17 @@ if __name__ == '__main__':
 				'//body/table[5]//table[2]//table[1]//table[1]//a/font/b/text()'
 		)
 
-		if texts:
-			# the first string represents current episodes of manga in a form
-			# of '1-NUM'
-			tokens = texts[0].split('-')
-			if len(tokens) > 1:
-				try:
-					latest = to_int(tokens[1])
-				except ValueError as ex:
-					logging.warning('invalid raw string for conversion')
-					continue
-				print(latest)
+		# the first string represents current episodes of manga should be
+		# in a form of '1-NUM'
+		tokens = texts[0].split('-') if texts else None
+		if len(tokens) > 1:
+			try:
+				latest = int(tokens[1])
+			except ValueError as ex:
+				logging.warning('invalid raw string for conversion')
+				continue
+			f.write('{},{}\n'.format(index, latest))
+			print('link: ', PAGE_TEMPLATE.format(index, latest))
+
+	f.close()
 
